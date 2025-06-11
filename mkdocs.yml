@@ -1,0 +1,43 @@
+site_name: TAG Documentation
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.tabs
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            docstring_style: google
+            show_if_no_docstring: true
+  - mkdocs-jupyter:
+      include_source: True
+      ignore_h1_titles: True
+      execute: false
+      execute_ignore: ["*.ipynb"]
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+
+watch:
+  - src
+  - tutorials
+
+nav:
+  - Home: index.md
+  - API Reference: api_reference.md
+  - Tutorials: tutorials.md

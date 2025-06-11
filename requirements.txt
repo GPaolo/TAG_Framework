@@ -1,0 +1,16 @@
+jupyterlab
+pandas
+tqdm
+bokeh
+Box2D
+click
+pygame
+torch
+tensorboard
+dataclasses_json
+torch_geometric
+pettingzoo
+scikit-learn
+numpy
+scipy
+matplotlib

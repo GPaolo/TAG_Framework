@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+
+[project]
+name = "tame_agent"
+authors = [
+    {name = "Giuseppe Paolo", email = "giuseppe.paolo93@gmail.com"},
+]
+dynamic = ["version", "readme", "dependencies"]
+description = "Package for implementing multi-level, multi-agent, hierarchical agents."
+requires-python = ">=3.10"
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Science/Research',
+    'Intended Audience :: Developers',
+    'Topic :: Software Development',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.10',
+]
+
+[project.optional-dependencies]
+dev = [
+    'ruff',
+    'black',
+    'mypy',
+    'pytest>=7.0',
+    'pytest-cov',
+    'pytest-check',
+    'pytest-mock',
+    'pytest-xdist',
+    'pre-commit',
+    'mkdocs',
+    'mkdocstrings[python]',
+    'mkdocs-material',
+    'nbconvert',
+    'jupyter'
+]
+swimmer = ['sbx-rl', 'brax']
+halfcheetah = ['sbx-rl', 'brax']
+marl = ['jaxmarl', 'qlearning', 'minigrid']
+mpe = ['pettingzoo']
+vmas = ['vmas', 'shimmy', 'pydantic']
+sisl = ['pettingzoo', 'Box2D']
+
+[tool.setuptools.dynamic]
+readme = { file = ["README.md"] }
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools_scm]
+write_to = "src/tame/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing"
+filterwarnings = [
+    'ignore:distutils Version classes are deprecated:DeprecationWarning',
+    'ignore:`np.bool8` is a deprecated alias for `np.bool_`:DeprecationWarning',
+    'ignore:Training and eval env are not of the same type:UserWarning',
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests",
+    "unit: marks unit tests"
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/tame/optional_imports.py",
+    "tests/*",
+    "src/tame.egg-info/*",
+    "exps/*"
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+    "if self\\.debug",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "@(abc\\.)?abstractmethod",
+    "if TYPE_CHECKING:",
+    "except ImportError:"
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.ruff]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+]
+ignore = ["E501"]  # line length handled by black
+line-length = 88
+target-version = "py310"
