@@ -146,6 +146,12 @@ class LevelEnv:
         self.uplinks = uplinks
         self.downlinks = downlinks
         self.action_ifreq = max(1, action_ifreq)
+        # Semi-MDP bookkeeping for levels acting every action_ifreq lower-level steps:
+        # one transition per decision, with the reward accumulated over the interval.
+        self._decision_obs: Dict[str, Any] = {}
+        self._interval_rew: Dict[str, float] = {}
+        self._interval_done: Dict[str, bool] = {}
+        self._interval_stored: Dict[str, bool] = {}
         if trace_type not in trace_types:
             raise ValueError(
                 f"Wrong trace type specified for {name}. Given: {trace_type} - Available: {trace_types.keys()}"
@@ -385,6 +391,10 @@ class LevelEnv:
         self.episode_returns = {ag: 0.0 for ag in self.agents}
         self.episode_ts = 0
         self.episode_idx += 1
+        self._decision_obs = {}
+        self._interval_rew = {ag: 0.0 for ag in self.agents}
+        self._interval_done = {ag: False for ag in self.agents}
+        self._interval_stored = {ag: True for ag in self.agents}
         return msg_obs, msg_infos
 
     def save_obs_from_bottom(
@@ -493,9 +503,10 @@ class LevelEnv:
 
         Flow:
             1. Creates agent observations using high-level actions and bottom-level observations
-            2. Executes actions at specified frequency (action_ifreq)
+            2. Selects new actions every action_ifreq lower-level steps, holding them otherwise
             3. Steps through the environment with agent actions
-            4. Processes and stores transitions if in training mode
+            4. Accumulates rewards over the decision interval and, in training mode, stores one
+               transition per decision (semi-MDP), plus a final observation at episode end
             5. Updates traces and episode returns
             6. Periodically saves agent models if save_path is specified
 
@@ -510,11 +521,18 @@ class LevelEnv:
             action_from_top=action, obs_from_bottom=self.obs_from_bottom
         )
 
-        # Act only every action K steps
-        # TODO this is quite ugly, the frequency should be decided by the agent not by the env
+        # Act only every action_ifreq steps of the lower level. Between decisions the
+        # action is held, and the level accumulates the rewards of the interval so that
+        # a single transition (decision obs, action, summed reward) is stored per decision.
+        # TODO the frequency should be decided by the agent not by the env
         if self.episode_ts % self.action_ifreq == 0:
             # Pass the higher level actions to the agents of this level as obs
             self.env_actions = self.act(observation=agent_obs, training=training)
+            # Open a new decision interval
+            self._decision_obs = agent_obs
+            self._interval_rew = {ag: 0.0 for ag in self.agents}
+            self._interval_done = {ag: False for ag in self.agents}
+            self._interval_stored = {ag: False for ag in self.agents}
 
         # Pass the actions of the agents of this level to the lower level env and get rew and ll_obs
         if isinstance(self.env, LevelEnv):
@@ -553,10 +571,20 @@ class LevelEnv:
         )
         # ---------------------------
 
+        # Accumulate the interval reward and termination for every agent of this level
+        # ---------------------------
+        for agent_name in self.agents:
+            self._interval_rew[agent_name] += env_rew[agent_name]
+            self._interval_done[agent_name] = (
+                self._interval_done[agent_name] or dones[agent_name]
+            )
+        # The interval closes when the next decision is due, or when the episode ends
+        interval_complete = (self.episode_ts + 1) % self.action_ifreq == 0
+        # ---------------------------
+
         # Train
         # ---------------------------
         last_agent_obs = None
-        # TODO probably should not store the transitions if no new action is done...
         if training:
             # No need for this when not training. (For now :P)
             for agent_name, agent in self.agents.items():
@@ -566,12 +594,19 @@ class LevelEnv:
                     for subagent in self.downlinks[agent_name]
                 }
 
-                agent.store(
-                    state=agent_obs[agent_name],
-                    action=agent_actions,
-                    reward=env_rew[agent_name],
-                    done=dones[agent_name],
-                )
+                # One transition per decision: the observation at decision time, the action
+                # taken, and the (undiscounted) sum of the rewards received over the interval.
+                # With action_ifreq == 1 this is the usual one transition per step.
+                if (interval_complete or dones[agent_name]) and not self._interval_stored[
+                    agent_name
+                ]:
+                    agent.store(
+                        state=self._decision_obs[agent_name],
+                        action=agent_actions,
+                        reward=self._interval_rew[agent_name],
+                        done=self._interval_done[agent_name],
+                    )
+                    self._interval_stored[agent_name] = True
 
                 # NOTE
                 # We create a new agent_obs with the last state from the env and the same top action!
